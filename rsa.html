@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure RSA File Utility</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .container-bg {
+            background-image: url('data:image/svg+xml,%3Csvg width="80" height="80" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="%23c8c8c8" fill-opacity="0.4"%3E%3Cpath d="M0 80L80 0H60L0 60V80ZM80 80L0 0h20L80 20V80Z"/%3E%3C/g%3E%3C/svg%3E');
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="container-bg bg-white rounded-xl shadow-2xl p-6 w-full max-w-4xl space-y-8">
+        <header class="text-center">
+            <h1 class="text-3xl font-bold text-gray-800">Secure RSA File Utility</h1>
+            <p class="text-sm text-gray-500 mt-1">A demonstration of RSA encryption and digital signatures.</p>
+        </header>
+
+        <!-- Key Management Section -->
+        <section class="p-6 bg-gray-50 rounded-lg shadow-inner space-y-4">
+            <h2 class="text-xl font-semibold text-gray-700">1. Key Management</h2>
+            <div class="grid md:grid-cols-2 gap-4">
+                <div class="p-4 bg-gray-100 rounded-lg border border-gray-200">
+                    <h3 class="font-bold text-lg text-gray-800">Alice's Keys</h3>
+                    <p class="text-xs text-gray-600 mt-2 break-words"><span class="font-semibold">Public Key:</span> <span id="alice-public-key-display">Not Generated</span></p>
+                    <p class="text-xs text-gray-600 break-words"><span class="font-semibold">Private Key:</span> <span id="alice-private-key-display">Not Generated</span></p>
+                </div>
+                <div class="p-4 bg-gray-100 rounded-lg border border-gray-200">
+                    <h3 class="font-bold text-lg text-gray-800">Bob's Keys</h3>
+                    <p class="text-xs text-gray-600 mt-2 break-words"><span class="font-semibold">Public Key:</span> <span id="bob-public-key-display">Not Generated</span></p>
+                    <p class="text-xs text-gray-600 break-words"><span class="font-semibold">Private Key:</span> <span id="bob-private-key-display">Not Generated</span></p>
+                </div>
+            </div>
+            <button id="generate-keys-btn" class="w-full bg-blue-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 transition-colors">Generate RSA Key Pairs</button>
+        </section>
+
+        <!-- Encryption & Signing Section -->
+        <section class="p-6 bg-gray-50 rounded-lg shadow-inner space-y-4">
+            <h2 class="text-xl font-semibold text-gray-700">2. Encrypt & Sign (as Alice)</h2>
+            <p class="text-sm text-gray-600">Encrypt a message for Bob using his public key and sign it with your private key.</p>
+            <textarea id="plaintext-input" placeholder="Type a message to encrypt..." class="w-full p-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 h-24"></textarea>
+            <button id="encrypt-sign-btn" class="w-full bg-green-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-green-700 transition-colors disabled:opacity-50" disabled>Encrypt & Sign for Bob</button>
+            <div class="p-3 bg-gray-100 rounded-lg border border-gray-200">
+                <h3 class="font-medium text-gray-700">Encrypted Payload (for Bob)</h3>
+                <p id="encrypted-output" class="text-xs text-gray-500 break-words mt-1">Ready to send...</p>
+            </div>
+        </section>
+
+        <!-- Decryption & Verification Section -->
+        <section class="p-6 bg-gray-50 rounded-lg shadow-inner space-y-4">
+            <h2 class="text-xl font-semibold text-gray-700">3. Decrypt & Verify (as Bob)</h2>
+            <p class="text-sm text-gray-600">Paste the encrypted payload here to decrypt it with your private key and verify the sender's signature.</p>
+            <textarea id="encrypted-input" placeholder="Paste the encrypted payload from Alice..." class="w-full p-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 h-24"></textarea>
+            <button id="decrypt-verify-btn" class="w-full bg-yellow-500 text-white font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-yellow-600 transition-colors disabled:opacity-50" disabled>Decrypt & Verify Signature</button>
+            <div class="p-3 bg-gray-100 rounded-lg border border-gray-200">
+                <h3 class="font-medium text-gray-700">Decrypted Message</h3>
+                <p id="decrypted-output" class="text-sm text-gray-600 mt-1">Awaiting decryption...</p>
+                <h3 class="font-medium text-gray-700 mt-4">Signature Status</h3>
+                <p id="signature-status" class="text-sm text-gray-600 mt-1">Not verified.</p>
+            </div>
+        </section>
+        
+        <!-- Status Message Box -->
+        <div id="status-message" class="text-center text-sm font-medium text-gray-600 mt-4">
+            Click "Generate RSA Key Pairs" to begin.
+        </div>
+
+    </div>
+
+    <script>
+        const statusMessage = document.getElementById('status-message');
+        let aliceKeys = null;
+        let bobKeys = null;
+
+        // Helper function for converting ArrayBuffer to Hex String
+        function arrayBufferToHex(buffer) {
+            return Array.prototype.map.call(new Uint8Array(buffer), x => ('00' + x.toString(16)).slice(-2)).join('');
+        }
+
+        // Helper function for converting Hex String to ArrayBuffer
+        function hexToArrayBuffer(hex) {
+            if (!hex) return new ArrayBuffer(0);
+            const typedArray = new Uint8Array(hex.match(/[\da-f]{2}/gi).map(h => parseInt(h, 16)));
+            return typedArray.buffer;
+        }
+
+        // --- Step 1: Generate Keys ---
+        document.getElementById('generate-keys-btn').addEventListener('click', async () => {
+            statusMessage.textContent = 'Generating RSA key pairs for Alice and Bob...';
+
+            try {
+                // Generate RSA key pair for Alice for encryption and signing
+                const aliceKeyPair = await window.crypto.subtle.generateKey(
+                    { name: 'RSA-OAEP', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+                    true, ['encrypt', 'decrypt']
+                );
+                
+                // We'll also use this key for signing/verifying
+                const aliceSignKey = await window.crypto.subtle.generateKey(
+                    { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+                    true, ['sign', 'verify']
+                );
+
+                // Generate RSA key pair for Bob for encryption and signing
+                const bobKeyPair = await window.crypto.subtle.generateKey(
+                    { name: 'RSA-OAEP', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+                    true, ['encrypt', 'decrypt']
+                );
+                
+                // We'll also use this key for signing/verifying
+                const bobSignKey = await window.crypto.subtle.generateKey(
+                    { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+                    true, ['sign', 'verify']
+                );
+
+                aliceKeys = {
+                    encrypt: aliceKeyPair,
+                    sign: aliceSignKey
+                };
+                bobKeys = {
+                    encrypt: bobKeyPair,
+                    sign: bobSignKey
+                };
+
+                // Export keys for display
+                const alicePublicKeyJwk = await window.crypto.subtle.exportKey('jwk', aliceKeys.encrypt.publicKey);
+                const alicePrivateKeyJwk = await window.crypto.subtle.exportKey('jwk', aliceKeys.encrypt.privateKey);
+                const bobPublicKeyJwk = await window.crypto.subtle.exportKey('jwk', bobKeys.encrypt.publicKey);
+                const bobPrivateKeyJwk = await window.crypto.subtle.exportKey('jwk', bobKeys.encrypt.privateKey);
+
+                document.getElementById('alice-public-key-display').textContent = JSON.stringify(alicePublicKeyJwk).substring(0, 100) + '...';
+                document.getElementById('alice-private-key-display').textContent = JSON.stringify(alicePrivateKeyJwk).substring(0, 100) + '...';
+                document.getElementById('bob-public-key-display').textContent = JSON.stringify(bobPublicKeyJwk).substring(0, 100) + '...';
+                document.getElementById('bob-private-key-display').textContent = JSON.stringify(bobPrivateKeyJwk).substring(0, 100) + '...';
+
+                // Enable next step buttons
+                document.getElementById('encrypt-sign-btn').disabled = false;
+                document.getElementById('decrypt-verify-btn').disabled = false;
+                statusMessage.textContent = 'Key pairs generated successfully. Ready for encryption!';
+            } catch (error) {
+                statusMessage.textContent = 'Error during key generation. See console for details.';
+                console.error("Key generation failed:", error);
+            }
+        });
+
+        // --- Step 2: Encrypt & Sign ---
+        document.getElementById('encrypt-sign-btn').addEventListener('click', async () => {
+            const plaintext = document.getElementById('plaintext-input').value;
+            if (!plaintext) {
+                statusMessage.textContent = 'Please enter a message to encrypt.';
+                return;
+            }
+
+            statusMessage.textContent = 'Encrypting and signing message...';
+            
+            try {
+                // Encrypt plaintext with Bob's public key (RSA-OAEP)
+                const encodedPlaintext = new TextEncoder().encode(plaintext);
+                const encryptedBuffer = await window.crypto.subtle.encrypt(
+                    { name: 'RSA-OAEP' },
+                    bobKeys.encrypt.publicKey,
+                    encodedPlaintext
+                );
+
+                // Sign the original plaintext with Alice's private key (RSASSA-PKCS1-v1_5)
+                const signatureBuffer = await window.crypto.subtle.sign(
+                    { name: 'RSASSA-PKCS1-v1_5' },
+                    aliceKeys.sign.privateKey,
+                    encodedPlaintext
+                );
+
+                // Export public keys (in a real app, these would be shared beforehand)
+                const alicePublicKey = await window.crypto.subtle.exportKey('spki', aliceKeys.sign.publicKey);
+                const bobPrivateKey = await window.crypto.subtle.exportKey('pkcs8', bobKeys.encrypt.privateKey);
+                
+                // Combine into a single payload for "transfer"
+                const payload = {
+                    encryptedData: arrayBufferToHex(encryptedBuffer),
+                    signature: arrayBufferToHex(signatureBuffer),
+                    alicePublicKey: arrayBufferToHex(alicePublicKey),
+                };
+
+                // Display the payload to be copied by Bob
+                document.getElementById('encrypted-output').textContent = JSON.stringify(payload);
+                statusMessage.textContent = 'Message encrypted and signed. The payload is ready for decryption!';
+
+            } catch (error) {
+                statusMessage.textContent = 'Error during encryption/signing. See console for details.';
+                console.error("Encryption/Signing failed:", error);
+            }
+        });
+
+        // --- Step 3: Decrypt & Verify ---
+        document.getElementById('decrypt-verify-btn').addEventListener('click', async () => {
+            const encryptedInput = document.getElementById('encrypted-input').value;
+            if (!encryptedInput) {
+                statusMessage.textContent = 'Please paste the encrypted payload.';
+                return;
+            }
+
+            statusMessage.textContent = 'Decrypting and verifying message...';
+
+            try {
+                const payload = JSON.parse(encryptedInput);
+                const encryptedBuffer = hexToArrayBuffer(payload.encryptedData);
+                const signatureBuffer = hexToArrayBuffer(payload.signature);
+                const alicePublicKeyBuffer = hexToArrayBuffer(payload.alicePublicKey);
+                
+                // Decrypt the message with Bob's private key (RSA-OAEP)
+                const decryptedBuffer = await window.crypto.subtle.decrypt(
+                    { name: 'RSA-OAEP' },
+                    bobKeys.encrypt.privateKey,
+                    encryptedBuffer
+                );
+                const decryptedMessage = new TextDecoder().decode(decryptedBuffer);
+
+                // Import Alice's public key from the payload
+                const importedAlicePublicKey = await window.crypto.subtle.importKey(
+                    'spki',
+                    alicePublicKeyBuffer,
+                    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+                    true,
+                    ['verify']
+                );
+                
+                // Verify the signature with Alice's public key (RSASSA-PKCS1-v1_5)
+                const isVerified = await window.crypto.subtle.verify(
+                    { name: 'RSASSA-PKCS1-v1_5' },
+                    importedAlicePublicKey,
+                    signatureBuffer,
+                    new TextEncoder().encode(decryptedMessage) // Use the unencrypted message to verify
+                );
+
+                // Display results
+                document.getElementById('decrypted-output').textContent = decryptedMessage;
+                if (isVerified) {
+                    document.getElementById('signature-status').textContent = 'Signature VALID! The message is authentic.';
+                    document.getElementById('signature-status').className = 'text-sm font-semibold text-green-600 mt-1';
+                } else {
+                    document.getElementById('signature-status').textContent = 'Signature FAILED. The message is not authentic or has been tampered with.';
+                    document.getElementById('signature-status').className = 'text-sm font-semibold text-red-600 mt-1';
+                }
+                statusMessage.textContent = 'Decryption and verification complete.';
+            } catch (error) {
+                statusMessage.textContent = 'Error during decryption/verification. See console for details. Make sure you copied the full payload.';
+                console.error("Decryption/Verification failed:", error);
+            }
+        });
+    </script>
+</body>
+</html>
